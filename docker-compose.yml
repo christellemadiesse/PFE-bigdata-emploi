@@ -1,0 +1,49 @@
+# docker-compose.yml
+# Environnement technique du projet PFE : Data Lake (MinIO), base structurée
+# (PostgreSQL) et moteur de traitement (Spark).
+# Lancement : docker compose up -d
+# Arrêt     : docker compose down
+
+services:
+
+  # --- Data Lake (stockage brut, équivalent S3 en local) ---
+  minio:
+    image: ghcr.io/radiorabe/minio:latest
+    container_name: pfe_minio
+    user: "0:0"   # exécute MinIO en root : évite l'erreur "file access denied" sur /data (usage local uniquement)
+    ports:
+      - "9000:9000"   # API MinIO (utilisée par le code Python/Spark)
+      - "9001:9001"   # Interface web d'administration
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin123
+    volumes:
+      - minio_data:/data
+    command: server /data --console-address ":9001"
+
+  # --- Base de données structurée (résultat du traitement Spark) ---
+  postgres:
+    image: postgres:16
+    container_name: pfe_postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: pfe_user
+      POSTGRES_PASSWORD: pfe_password
+      POSTGRES_DB: pfe_emploi
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  # --- Moteur de traitement Big Data ---
+  spark:
+    image: apache/spark:3.5.3
+    container_name: pfe_spark
+    ports:
+      - "8080:8080"   # Interface web du Spark Master
+      - "7077:7077"   # Port utilisé par les scripts pour se connecter à Spark
+    command: ["/opt/spark/bin/spark-class", "org.apache.spark.deploy.master.Master"]
+
+# Volumes : permettent de conserver les données même si on arrête/relance les conteneurs
+volumes:
+  minio_data:
+  postgres_data:
