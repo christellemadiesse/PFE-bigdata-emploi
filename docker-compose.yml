@@ -41,7 +41,20 @@ services:
     ports:
       - "8080:8080"   # Interface web du Spark Master
       - "7077:7077"   # Port utilisé par les scripts pour se connecter à Spark
-    command: ["/opt/spark/bin/spark-class", "org.apache.spark.deploy.master.Master"]
+    command: ["/opt/spark/bin/spark-class", "org.apache.spark.deploy.master.Master", "--host", "spark"]
+
+  # --- Worker Spark : exécute réellement les calculs demandés au Master ---
+  spark-worker:
+    image: apache/spark:3.5.3
+    container_name: pfe_spark_worker
+    depends_on:
+      - spark
+    ports:
+      - "8081:8081"   # Interface web du worker
+    environment:
+      SPARK_WORKER_CORES: 2
+      SPARK_WORKER_MEMORY: 1g   # Docker Desktop dispose d'environ 3,6 Go au total
+    command: ["/opt/spark/bin/spark-class", "org.apache.spark.deploy.worker.Worker", "spark://spark:7077"]
 
 # Volumes : permettent de conserver les données même si on arrête/relance les conteneurs
 volumes:
