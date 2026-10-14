@@ -15,8 +15,8 @@ services:
       - "9000:9000"   # API MinIO (utilisée par le code Python/Spark)
       - "9001:9001"   # Interface web d'administration
     environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin123
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?définir MINIO_ROOT_USER dans le fichier .env}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?définir MINIO_ROOT_PASSWORD dans le fichier .env}
     volumes:
       - minio_data:/data
     command: server /data --console-address ":9001"
@@ -28,9 +28,9 @@ services:
     ports:
       - "5432:5432"
     environment:
-      POSTGRES_USER: pfe_user
-      POSTGRES_PASSWORD: pfe_password
-      POSTGRES_DB: pfe_emploi
+      POSTGRES_USER: ${POSTGRES_USER:?définir POSTGRES_USER dans le fichier .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?définir POSTGRES_PASSWORD dans le fichier .env}
+      POSTGRES_DB: ${POSTGRES_DB:?définir POSTGRES_DB dans le fichier .env}
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
