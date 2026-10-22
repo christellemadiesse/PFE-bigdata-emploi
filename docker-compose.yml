@@ -1,6 +1,7 @@
 # docker-compose.yml
 # Environnement technique du projet PFE : Data Lake (MinIO), base structurée
-# (PostgreSQL) et moteur de traitement (Spark).
+# (PostgreSQL) et moteur de traitement (Spark Master + 1 Worker).
+# Les identifiants sont lus dans le fichier .env (non versionné), voir .env.example
 # Lancement : docker compose up -d
 # Arrêt     : docker compose down
 
@@ -15,8 +16,8 @@ services:
       - "9000:9000"   # API MinIO (utilisée par le code Python/Spark)
       - "9001:9001"   # Interface web d'administration
     environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?définir MINIO_ROOT_USER dans le fichier .env}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?définir MINIO_ROOT_PASSWORD dans le fichier .env}
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
     volumes:
       - minio_data:/data
     command: server /data --console-address ":9001"
@@ -28,33 +29,38 @@ services:
     ports:
       - "5432:5432"
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:?définir POSTGRES_USER dans le fichier .env}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?définir POSTGRES_PASSWORD dans le fichier .env}
-      POSTGRES_DB: ${POSTGRES_DB:?définir POSTGRES_DB dans le fichier .env}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
-  # --- Moteur de traitement Big Data ---
+  # --- Moteur de traitement Big Data : le Master coordonne les calculs ---
   spark:
     image: apache/spark:3.5.3
     container_name: pfe_spark
     ports:
       - "8080:8080"   # Interface web du Spark Master
       - "7077:7077"   # Port utilisé par les scripts pour se connecter à Spark
-    command: ["/opt/spark/bin/spark-class", "org.apache.spark.deploy.master.Master", "--host", "spark"]
+    environment:      # identifiants lus depuis .env : MinIO pour lire le data lake, PostgreSQL pour écrire les résultats
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - ./spark_jobs:/opt/spark-jobs   # dossier des scripts PySpark, visible depuis le conteneur
+    command: ["/opt/spark/bin/spark-class", "org.apache.spark.deploy.master.Master"]
 
-  # --- Worker Spark : exécute réellement les calculs demandés au Master ---
+  # --- Worker Spark : c'est lui qui exécute réellement les calculs ---
   spark-worker:
     image: apache/spark:3.5.3
     container_name: pfe_spark_worker
     depends_on:
       - spark
     ports:
-      - "8081:8081"   # Interface web du worker
-    environment:
-      SPARK_WORKER_CORES: 2
-      SPARK_WORKER_MEMORY: 1g   # Docker Desktop dispose d'environ 3,6 Go au total
-    command: ["/opt/spark/bin/spark-class", "org.apache.spark.deploy.worker.Worker", "spark://spark:7077"]
+      - "8081:8081"   # Interface web du Worker
+    command: ["/opt/spark/bin/spark-class", "org.apache.spark.deploy.worker.Worker", "--cores", "2", "--memory", "1g", "spark://spark:7077"]
 
 # Volumes : permettent de conserver les données même si on arrête/relance les conteneurs
 volumes:
